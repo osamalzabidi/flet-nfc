@@ -5,7 +5,7 @@ import 'nfc_service.dart';
 
 class Extension extends FletExtension {
   @override
-  Widget? createWidget(Key? key, Control control) {
+  FletService? createService(Control control) {
     switch (control.type) {
       case "NfcManager":
         return NfcService(control: control);

@@ -3,8 +3,9 @@ import 'dart:convert';
 
 import 'package:flet/flet.dart';
 import 'package:flutter/foundation.dart';
-import 'package:nfc_manager/nfc_manager.dart';
+import 'package:nfc_manager/ndef_record.dart';
 import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
+import 'package:nfc_manager/nfc_manager.dart';
 
 class NfcService extends FletService {
   NfcService({required super.control});
@@ -96,8 +97,7 @@ class NfcService extends FletService {
       await NfcManager.instance.startSession(
         pollingOptions: pollingOptions,
         alertMessageIos: args["alert_message_ios"] as String?,
-        invalidateAfterFirstRead:
-            args["invalidate_after_first_read"] as bool? ?? false,
+        invalidateAfterFirstReadIos: args["invalidate_after_first_read"] as bool? ?? false, // Fixed name
         onDiscovered: (NfcTag tag) async {
           _lastTag = tag;
           final data = _buildTagPayload(tag);
@@ -130,7 +130,11 @@ class NfcService extends FletService {
   // Tag payload construction
   Map<String, dynamic>? _buildTagPayload(NfcTag tag) {
     final ndef = Ndef.from(tag);
-    final rawTech = tag.data.keys.map((k) => k.toString()).toList();
+    
+    // Safely extract keys
+    final rawTech = tag.data is Map 
+        ? (tag.data as Map).keys.map((k) => k.toString()).toList() 
+        : <String>[];
 
     if (ndef == null) {
       return {
