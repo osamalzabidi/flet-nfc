@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flet/flet.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ndef_record/ndef_record.dart';
-import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 import 'package:nfc_manager/nfc_manager.dart';
-
+import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 
 class NfcService extends FletService {
   NfcService({required super.control});
@@ -98,7 +98,7 @@ class NfcService extends FletService {
       await NfcManager.instance.startSession(
         pollingOptions: pollingOptions,
         alertMessageIos: args["alert_message_ios"] as String?,
-        invalidateAfterFirstReadIos: args["invalidate_after_first_read"] as bool? ?? false, // Fixed name
+        invalidateAfterFirstReadIos: args["invalidate_after_first_read"] as bool? ?? false,
         onDiscovered: (NfcTag tag) async {
           _lastTag = tag;
           final data = _buildTagPayload(tag);
@@ -132,7 +132,6 @@ class NfcService extends FletService {
   Map<String, dynamic>? _buildTagPayload(NfcTag tag) {
     final ndef = Ndef.from(tag);
     
-    // Safely extract keys
     final rawTech = tag.data is Map 
         ? (tag.data as Map).keys.map((k) => k.toString()).toList() 
         : <String>[];
@@ -216,21 +215,34 @@ class NfcService extends FletService {
   // NDEF write
   Future<Map<String, dynamic>> _writeText(String text) async {
     final tag = _lastTag;
-    if (tag == null) {
-      return {"success": false, "error": "No discovered tag to write to."};
-    }
+    if (tag == null) return {"success": false, "error": "No tag discovered."};
 
     final ndef = Ndef.from(tag);
-    if (ndef == null) {
-      return {"success": false, "error": "Tag is not NDEF-compatible."};
-    }
-    if (!ndef.isWritable) {
-      return {"success": false, "error": "Tag is read-only."};
-    }
+    if (ndef == null) return {"success": false, "error": "Tag is not NDEF-compatible."};
+    if (!ndef.isWritable) return {"success": false, "error": "Tag is read-only."};
 
     try {
-      final record = NdefRecord.createText(text);
-      final message = NdefMessage(records: [record]);
+      // Manually build the Text record (TNF = wellKnown, type = 'T')
+      final languageCode = 'en';
+      final langBytes = utf8.encode(languageCode);
+      final textBytes = utf8.encode(text);
+      // Status byte: bit 7 = 0 (UTF-8), lower 6 bits = language code length
+      final statusByte = langBytes.length & 0x3F;
+      
+      final payload = Uint8List.fromList([
+        statusByte,
+        ...langBytes,
+        ...textBytes,
+      ]);
+
+      final textRecord = NdefRecord(
+        typeNameFormat: TypeNameFormat.wellKnown,
+        type: Uint8List.fromList('T'.codeUnits),
+        identifier: Uint8List(0),
+        payload: payload,
+      );
+
+      final message = NdefMessage(records: [textRecord]);
       await ndef.write(message: message);
       return {"success": true, "error": null};
     } catch (e) {
@@ -240,21 +252,26 @@ class NfcService extends FletService {
 
   Future<Map<String, dynamic>> _writeUri(String uri) async {
     final tag = _lastTag;
-    if (tag == null) {
-      return {"success": false, "error": "No discovered tag to write to."};
-    }
+    if (tag == null) return {"success": false, "error": "No tag discovered."};
 
     final ndef = Ndef.from(tag);
-    if (ndef == null) {
-      return {"success": false, "error": "Tag is not NDEF-compatible."};
-    }
-    if (!ndef.isWritable) {
-      return {"success": false, "error": "Tag is read-only."};
-    }
+    if (ndef == null) return {"success": false, "error": "Tag is not NDEF-compatible."};
+    if (!ndef.isWritable) return {"success": false, "error": "Tag is read-only."};
 
     try {
-      final record = NdefRecord.createUri(Uri.parse(uri));
-      final message = NdefMessage(records: [record]);
+      // Manually build the URI record (TNF = wellKnown, type = 'U')
+      final uriBytes = utf8.encode(uri);
+      // Prefix code 0x00 means no abbreviation (full URI is encoded)
+      final payload = Uint8List.fromList([0x00, ...uriBytes]);
+
+      final uriRecord = NdefRecord(
+        typeNameFormat: TypeNameFormat.wellKnown,
+        type: Uint8List.fromList('U'.codeUnits),
+        identifier: Uint8List(0),
+        payload: payload,
+      );
+
+      final message = NdefMessage(records: [uriRecord]);
       await ndef.write(message: message);
       return {"success": true, "error": null};
     } catch (e) {
