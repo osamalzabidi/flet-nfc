@@ -2,8 +2,8 @@
 
 flet-nfc [Flet](https://flet.dev) extension.
 
-<!--- If your extension wraps a Flutter package, credit it here, ex:
-It is based on the [xyz](https://pub.dev/packages/xyz) Flutter package. -->
+<!--- If your extension wraps a Flutter package, credit it here, ex: -->
+It is based on the [nfc_manager](https://pub.dev/packages/nfc_manager) Flutter package.
 
 ## Platform Support
 
@@ -11,7 +11,7 @@ It is based on the [xyz](https://pub.dev/packages/xyz) Flutter package. -->
 
 | Platform  | iOS | Android | Web | Windows | macOS | Linux |
 |-----------|-----|---------|-----|---------|-------|-------|
-| Supported | ✅   | ✅       | ✅   | ✅       | ✅     | ✅     |
+| Supported | ✅   | ✅       | ❌   | ❌       | ❌     | ❌     |
 
 ## Usage
 
@@ -23,19 +23,8 @@ Add `flet-nfc` dependency to the `pyproject.toml` of your Flet project:
 
 ```toml
 dependencies = [
-  "flet-nfc @ git+https://github.com/MY_GITHUB_ACCOUNT/flet-nfc",
-  "flet>=1.1.2",
-]
-```
-
-<!--- Remove below list item, if your extension isn't yet available on PyPI. -->
-
-* **From PyPI**
-
-```toml
-dependencies = [
-  "flet-nfc",
-  "flet>=1.1.2",
+  "flet-nfc @ git+https://github.com/osamalzabidi/flet-nfc",
+  "flet>=1.1.0",
 ]
 ```
 
@@ -45,32 +34,10 @@ A Flet extension has two sides: its Python controls/services and the native Flut
 That native code must be compiled into a Flet client before your controls can render, and the
 prebuilt client that a plain `flet run` uses does **not** include this extension.
 
-So run your app in one of these two ways:
-
-**1. [`flet debug`](https://flet.dev/docs/cli/flet-debug)** — all platforms: *Windows, macOS, Linux, Web, iOS, Android*
-
-Compiles the extension and launches your app on the target you pick. 
-The simplest option, and the way to go for mobile and web:
-
-```bash
-flet debug macos                   # desktop & web: no device needed
-flet debug android -d <device-id>  # mobile: connect a device/emulator first
-```
+So run your app:
 
 For iOS and Android, pass `-d <device-id>` (run `flet debug --show-devices` to list connected devices).
 Edits to your **Python** code are picked up the next time you run `flet debug`.
-
-**2. [`flet build`](https://flet.dev/docs/cli/flet-build) once, then [`flet run`](https://flet.dev/docs/cli/flet-run)** — desktop only: *Windows, macOS, Linux*
-
-Build a custom client that bundles the extension **once**, then use `flet run` for a fast hot-reload loop while you edit Python:
-
-```bash
-flet build macos  # or: flet build windows / flet build linux
-flet run          # run from the folder where build/ was created, so it reuses that client
-```
-
-`flet run` auto-detects the client under `build/<platform>/`, so your Python edits hot-reload instantly.
-Rebuild only when the extension's **Dart** code changes.
 
 ### Examples
 
@@ -80,4 +47,4 @@ See the [examples](examples) directory.
 
 <!--- Update the link, if your docs are elsewhere. Alternatively, you could write out all docs in this section directly. -->
 
-Detailed documentation for this package can be found [here](https://MY_GITHUB_ACCOUNT.github.io/flet-nfc/).
+Detailed documentation for this package can be found [here](https://osamalzabidi.github.io/flet-nfc/).
