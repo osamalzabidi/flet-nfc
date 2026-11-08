@@ -34,3 +34,6 @@ flet-nfc = { path = "../../", editable = true }
 
 [tool.flet.android.permission]
 "android.permission.NFC" = true
+
+[tool.flet.android.feature]
+"android.hardware.nfc" = false

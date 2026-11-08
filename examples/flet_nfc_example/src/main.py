@@ -1,47 +1,68 @@
 import flet as ft
 
-from flet_nfc import NfcManager, NfcPollingOption
+from flet_nfc import NfcAvailability, NfcManager, NfcPollingOption
 
 
-async def main(page: ft.Page):
+def main(page: ft.Page):
+    page.title = "NFC Demo"
+
     status = ft.Text("Checking NFC availability...")
-    log = ft.ListView(expand=True)
+    log = ft.ListView(expand=True, spacing=4)
 
     nfc = NfcManager()
 
-    async def setup():
-        avail = await nfc.check_availability()
-        status.value = f"NFC Status: {avail.value}"
+    def add_log(msg: str):
+        log.controls.append(ft.Text(msg, size=12))
         page.update()
 
     def on_discovered(e: ft.ControlEvent):
-        log.controls.append(ft.Text(f"Tag Discovered! Data: {e.data}"))
+        data = e.data or {}
+        add_log(
+            f"✅ Tag discovered: NDEF={data.get('is_ndef')} writable={data.get('is_writable')}"
+        )
+        for rec in data.get("records", []):
+            if rec.get("type") == "text":
+                add_log(f"   📝 Text: {rec.get('text')}")
+            elif rec.get("type") == "uri":
+                add_log(f"   🔗 URI: {rec.get('uri')}")
+            elif rec.get("type") == "mime":
+                add_log(f"   📎 MIME: {rec.get('mime_type')}")
+        status.value = "Tag read — hold another tag or stop the session."
         page.update()
+
+    def on_error(e: ft.ControlEvent):
+        add_log(f"❌ Error: {e.data}")
+        status.value = "Session error."
+
+    def on_session_end(e: ft.ControlEvent):
+        add_log("⏹️ Session ended.")
+        status.value = "Session stopped."
 
     nfc.on_discovered = on_discovered
+    nfc.on_error = on_error
+    nfc.on_session_end = on_session_end
+
+    async def setup():
+        avail = await nfc.check_availability()
+        status.value = f"NFC: {avail.value}"
+        if avail != NfcAvailability.ENABLED:
+            add_log("⚠️ NFC is not enabled on this device.")
+        page.update()
 
     async def start_scan(_):
-        status.value = "Scanning... Tap a tag to the back of your phone."
+        ok = await nfc.start_session(
+            polling_options=[NfcPollingOption.ISO14443],
+            alert_message_ios="Hold your iPhone near the tag.",
+        )
+        status.value = "Scanning..." if ok else "Could not start session."
         page.update()
-        try:
-            # Start session in a background task so UI doesn't freeze
-            await nfc.start_session(polling_options=[NfcPollingOption.ISO14443])
-        except Exception as ex:
-            log.controls.append(ft.Text(f"Error: {ex}"))
-            page.update()
 
     async def stop_scan(_):
         await nfc.stop_session()
-        status.value = "Session stopped."
-        page.update()
 
-    async def write_data(_):
-        try:
-            success = await nfc.write_tag(text="Hello Flet!", url="https://flet.dev")
-            log.controls.append(ft.Text(f"Write success: {success}"))
-        except Exception as ex:
-            log.controls.append(ft.Text(f"Write error: {ex}"))
-        page.update()
+    async def write_demo(_):
+        res = await nfc.write_text("Hello from Flet!")
+        add_log(f"Write result: {res}")
 
     page.add(
         ft.SafeArea(
@@ -50,10 +71,11 @@ async def main(page: ft.Page):
                     status,
                     ft.Row(
                         [
-                            ft.FilledButton("Start Scan", on_click=start_scan),
+                            ft.FilledButton("Start scan", on_click=start_scan),
                             ft.OutlinedButton("Stop", on_click=stop_scan),
-                            ft.FilledButton("Write Tag", on_click=write_data),
-                        ]
+                            ft.FilledButton("Write 'Hello Flet'", on_click=write_demo),
+                        ],
+                        wrap=True,
                     ),
                     ft.Divider(),
                     log,
