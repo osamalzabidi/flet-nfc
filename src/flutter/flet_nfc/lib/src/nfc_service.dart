@@ -3,9 +3,10 @@ import 'dart:convert';
 
 import 'package:flet/flet.dart';
 import 'package:flutter/foundation.dart';
-import 'package:nfc_manager/ndef_record.dart';
+import 'package:ndef_record/ndef_record.dart';
 import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+
 
 class NfcService extends FletService {
   NfcService({required super.control});
@@ -162,8 +163,8 @@ class NfcService extends FletService {
   }
 
   Map<String, dynamic> _parseRecord(NdefRecord record) {
-    // Text record: TNF = nfcWellknown, type = [0x54] ('T')
-    if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown &&
+    // Text record
+    if (record.typeNameFormat == TypeNameFormat.wellKnown &&
         record.type.isNotEmpty &&
         record.type[0] == 0x54) {
       final langLen = record.payload.isNotEmpty ? record.payload[0] & 0x3F : 0;
@@ -176,8 +177,8 @@ class NfcService extends FletService {
       };
     }
 
-    // URI record: TNF = nfcWellknown, type = [0x55] ('U')
-    if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown &&
+    // URI record
+    if (record.typeNameFormat == TypeNameFormat.wellKnown &&
         record.type.isNotEmpty &&
         record.type[0] == 0x55) {
       final prefix = _uriPrefixes[record.payload.isNotEmpty
@@ -194,7 +195,7 @@ class NfcService extends FletService {
     }
 
     // MIME record
-    if (record.typeNameFormat == NdefTypeNameFormat.media) {
+    if (record.typeNameFormat == TypeNameFormat.media) {
       final mime = utf8.decode(record.type, allowMalformed: true);
       return {
         "type": "mime",
@@ -229,7 +230,7 @@ class NfcService extends FletService {
 
     try {
       final message = NdefMessage([NdefRecord.createText(text)]);
-      await ndef.write(message);
+      await ndef.write(message: message);
       return {"success": true, "error": null};
     } catch (e) {
       return {"success": false, "error": e.toString()};
@@ -252,7 +253,7 @@ class NfcService extends FletService {
 
     try {
       final message = NdefMessage([NdefRecord.createUri(Uri.parse(uri))]);
-      await ndef.write(message);
+      await ndef.write(message: message);
       return {"success": true, "error": null};
     } catch (e) {
       return {"success": false, "error": e.toString()};
