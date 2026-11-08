@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flet/flet.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 
 class NfcService extends FletService {
   NfcService({required super.control});
@@ -44,7 +45,7 @@ class NfcService extends FletService {
 
         await NfcManager.instance.startSession(
           pollingOptions: pollingOptions,
-          alertMessageIOS: args["alert_message_ios"] as String?,
+          alertMessageIos: args["alert_message_ios"] as String?,
           onDiscovered: (NfcTag tag) async {
             _currentTag = tag;
             control.triggerEvent("discovered", tag.data.toString());
@@ -54,7 +55,7 @@ class NfcService extends FletService {
 
       case "stop_session":
         await NfcManager.instance.stopSession(
-          errorMessageIOS: args["error_message"] as String?,
+          errorMessageIos: args["error_message"] as String?,
         );
         _currentTag = null;
         return null;
@@ -67,7 +68,6 @@ class NfcService extends FletService {
         final message = ndef.cachedMessage;
         if (message == null) return {};
         
-        // Simplified parsing for example purposes
         return {"records_count": message.records.length};
 
       case "write_tag":
