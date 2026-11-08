@@ -229,7 +229,8 @@ class NfcService extends FletService {
     }
 
     try {
-      final message = NdefMessage([NdefRecord.createText(text)]);
+      final record = TextRecord.create(text);
+      final message = NdefMessage(records: [record]);
       await ndef.write(message: message);
       return {"success": true, "error": null};
     } catch (e) {
@@ -252,7 +253,8 @@ class NfcService extends FletService {
     }
 
     try {
-      final message = NdefMessage([NdefRecord.createUri(Uri.parse(uri))]);
+      final record = UriRecord.create(Uri.parse(uri));
+      final message = NdefMessage(records: [record]);
       await ndef.write(message: message);
       return {"success": true, "error": null};
     } catch (e) {
