@@ -8,143 +8,280 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-
-# Raise Flet's own logger to DEBUG so framework/transport details are visible.
 logging.getLogger("flet").setLevel(logging.DEBUG)
-
-# Enable these only when you need deep control-tree or component diagnostics.
-# logging.getLogger("flet_object_patch").setLevel(logging.DEBUG)
-# logging.getLogger("flet_components").setLevel(logging.DEBUG)
-
-# App-specific logger. Keeping a named logger makes it easy to filter your
-# own messages from Flet's framework logs via `adb logcat -s python | grep nfc_demo`.
-logger = logging.getLogger("nfc_demo")
+logger = logging.getLogger("nfc_lab")
 
 
 def main(page: ft.Page):
-    page.title = "NFC Demo"
-
-    status = ft.Text("Checking NFC availability...")
-    log = ft.ListView(expand=True, spacing=4)
+    page.title = "NFC Comprehensive Lab"
+    page.theme_mode = ft.ThemeMode.DARK
+    page.padding = 20
 
     nfc = NfcManager()
+    last_read_tag = None
 
-    def add_log(msg: str):
-        log.controls.append(ft.Text(msg, size=12))
+    status_icon = ft.Icon(ft.Icons.NFC, size=40, color=ft.Colors.GREY)
+    status_text = ft.Text(
+        "Checking Availability...", size=18, weight=ft.FontWeight.BOLD
+    )
+    session_indicator = ft.ProgressBar(visible=False, width=200)
+
+    log_view = ft.ListView(expand=True, spacing=4, padding=10, auto_scroll=True)
+
+    polling_iso14443 = ft.Checkbox(label="ISO 14443 (Mifare/NfcA/B)", value=True)
+    polling_iso18092 = ft.Checkbox(label="ISO 18092 (FeliCa)", value=False)
+    polling_iso15693 = ft.Checkbox(label="ISO 15693 (Vicinity)", value=False)
+
+    alert_msg_ios = ft.TextField(
+        label="iOS Alert Message", value="Hold your iPhone near the tag.", width=400
+    )
+    invalidate_first_read = ft.Switch(
+        label="Invalidate session after first read (iOS)", value=False
+    )
+    stop_error_msg = ft.TextField(
+        label="iOS Error Message (on stop)",
+        value="Session cancelled by user.",
+        width=400,
+    )
+
+    text_input = ft.TextField(
+        label="Text to write", value="Hello from Flet NFC!", width=400
+    )
+    uri_input = ft.TextField(label="URI to write", value="https://flet.dev", width=400)
+
+    def add_log(msg: str, color=ft.Colors.ON_SURFACE):
+        log_view.controls.append(ft.Text(msg, size=12, color=color))
         page.update()
+
+    def update_status_ui(avail: NfcAvailability):
+        status_icon.color = (
+            ft.Colors.GREEN
+            if avail == NfcAvailability.ENABLED
+            else (
+                ft.Colors.ORANGE if avail == NfcAvailability.DISABLED else ft.Colors.RED
+            )
+        )
+        status_icon.name = (
+            ft.Icons.NFC if avail != NfcAvailability.UNSUPPORTED else ft.Icons.NFC_OFF
+        )
+        status_text.value = f"NFC Status: {avail.value.upper()}"
+
+        # Disable scan buttons if not enabled
+        btn_start_scan.disabled = avail != NfcAvailability.ENABLED
+        page.update()
+
+    def get_selected_polling_options() -> list[NfcPollingOption]:
+        opts = []
+        if polling_iso14443.value:
+            opts.append(NfcPollingOption.ISO14443)
+        if polling_iso18092.value:
+            opts.append(NfcPollingOption.ISO18092)
+        if polling_iso15693.value:
+            opts.append(NfcPollingOption.ISO15693)
+        return opts
+
+    def on_state_changed(e: ft.ControlEvent):
+        new_state = e.data
+        add_log(
+            f"🔔 [SYSTEM EVENT] NFC state changed to: {new_state.upper()}",
+            ft.Colors.BLUE,
+        )
+        if new_state == "enabled":
+            page.run_task(check_avail)
+        elif new_state == "disabled":
+            update_status_ui(NfcAvailability.DISABLED)
 
     def on_discovered(e: ft.ControlEvent):
+        nonlocal last_read_tag
         data = e.data or {}
-        logger.info(
-            "Tag discovered: NDEF=%s, writable=%s, tech=%s",
-            data.get("is_ndef"),
-            data.get("is_writable"),
-            data.get("raw_tech"),
-        )
+        last_read_tag = data
         add_log(
-            f"✅ Tag discovered: NDEF={data.get('is_ndef')} writable={data.get('is_writable')}"
+            f"✅ Tag Discovered! NDEF={data.get('is_ndef')}, Writable={data.get('is_writable')}",
+            ft.Colors.GREEN,
         )
+        add_log(f"   Tech: {data.get('raw_tech')}")
+
         for rec in data.get("records", []):
-            if rec.get("type") == "text":
-                logger.debug("  Text record: %s", rec.get("text"))
+            rtype = rec.get("type")
+            if rtype == "text":
                 add_log(f"   📝 Text: {rec.get('text')}")
-            elif rec.get("type") == "uri":
-                logger.debug("  URI record: %s", rec.get("uri"))
+            elif rtype == "uri":
                 add_log(f"   🔗 URI: {rec.get('uri')}")
-            elif rec.get("type") == "mime":
-                logger.debug("  MIME record: %s", rec.get("mime_type"))
+            elif rtype == "mime":
                 add_log(f"   📎 MIME: {rec.get('mime_type')}")
-        status.value = "Tag read — hold another tag or stop the session."
-        page.update()
+            else:
+                add_log(f"   ❓ Unknown payload: {rec.get('payload')}")
 
     def on_error(e: ft.ControlEvent):
-        logger.error("NFC error: %s", e.data)
-        add_log(f"❌ Error: {e.data}")
-        status.value = "Session error."
+        add_log(f"❌ [SERVICE ERROR] {e.data}", ft.Colors.RED)
 
     def on_session_end(e: ft.ControlEvent):
-        logger.info("NFC session ended.")
-        add_log("⏹️ Session ended.")
-        status.value = "Session stopped."
+        add_log("⏹️ [SERVICE] NFC session ended.", ft.Colors.ORANGE)
+        session_indicator.visible = False
+        page.update()
 
     nfc.on_discovered = on_discovered
     nfc.on_error = on_error
     nfc.on_session_end = on_session_end
+    nfc.on_state_changed = on_state_changed
 
-    async def setup():
-        logger.info("Checking NFC availability...")
+    async def check_avail():
         try:
             avail = await nfc.check_availability()
-            logger.info("NFC availability: %s", avail.value)
-            status.value = f"NFC: {avail.value}"
-            if avail != NfcAvailability.ENABLED:
-                logger.warning("NFC is not enabled on this device.")
-                add_log("⚠️ NFC is not enabled on this device.")
-        except Exception:
-            logger.exception("Failed to check NFC availability")
-            add_log("❌ Failed to check NFC availability (see logs).")
-        page.update()
+            update_status_ui(avail)
+            logger.info("Availability checked: %s", avail.value)
+        except Exception as ex:
+            add_log(f"Failed to check availability: {ex}", ft.Colors.RED)
 
     async def start_scan(_):
-        logger.info("Starting NFC scan...")
-        try:
-            ok = await nfc.start_session(
-                polling_options=[NfcPollingOption.ISO14443],
-                alert_message_ios="Hold your iPhone near the tag.",
-            )
-            if ok:
-                logger.info("NFC session started successfully.")
-                status.value = "Scanning..."
-            else:
-                logger.warning("NFC session could not be started.")
-                status.value = "Could not start session."
-        except Exception:
-            logger.exception("Exception while starting NFC session")
-            status.value = "Could not start session."
+        opts = get_selected_polling_options()
+        if not opts:
+            add_log("⚠️ Please select at least one polling option.", ft.Colors.ORANGE)
+            return
+
+        add_log(f"▶️ Starting session with options: {[o.value for o in opts]}...")
+        session_indicator.visible = True
         page.update()
+
+        ok = await nfc.start_session(
+            polling_options=opts,
+            alert_message_ios=alert_msg_ios.value,
+            invalidate_after_first_read=invalidate_first_read.value,
+        )
+
+        if not ok:
+            add_log("❌ Failed to start session.", ft.Colors.RED)
+            session_indicator.visible = False
+            page.update()
 
     async def stop_scan(_):
-        logger.info("Stopping NFC scan...")
-        try:
-            await nfc.stop_session()
-        except Exception:
-            logger.exception("Exception while stopping NFC session")
-        page.update()
+        add_log("⏹️ Stopping session manually...")
+        await nfc.stop_session(error_message_ios=stop_error_msg.value)
 
-    async def write_demo(_):
-        logger.info("Writing text record: 'Hello from Flet!'")
-        try:
-            res = await nfc.write_text("Hello from Flet!")
-            logger.info("Write result: %s", res)
-            add_log(f"Write result: {res}")
-        except Exception:
-            logger.exception("Exception while writing NFC tag")
-            add_log("❌ Write failed (see logs).")
+    async def write_text(_):
+        if not text_input.value:
+            return
+        add_log(f"✍️ Writing text: '{text_input.value}'...")
+        res = await nfc.write_text(text_input.value)
+        if res.get("success"):
+            add_log("✅ Text written successfully!", ft.Colors.GREEN)
+        else:
+            add_log(f"❌ Write failed: {res.get('error')}", ft.Colors.RED)
 
+    async def write_uri(_):
+        if not uri_input.value:
+            return
+        add_log(f"✍️ Writing URI: '{uri_input.value}'...")
+        res = await nfc.write_uri(uri_input.value)
+        if res.get("success"):
+            add_log("✅ URI written successfully!", ft.Colors.GREEN)
+        else:
+            add_log(f"❌ Write failed: {res.get('error')}", ft.Colors.RED)
+
+    btn_start_scan = ft.FilledButton(
+        "Start Scan", on_click=start_scan, icon=ft.Icons.SEARCH, disabled=True
+    )
+
+    tab_scan = ft.Column(
+        [
+            ft.Text(
+                "Polling Options (Technologies to look for):", weight=ft.FontWeight.BOLD
+            ),
+            polling_iso14443,
+            polling_iso18092,
+            polling_iso15693,
+            ft.Divider(),
+            ft.Row(
+                [
+                    btn_start_scan,
+                    ft.OutlinedButton(
+                        "Stop Session", on_click=stop_scan, icon=ft.Icons.STOP
+                    ),
+                ]
+            ),
+            ft.Divider(),
+            ft.Text("Event Log", weight=ft.FontWeight.BOLD),
+            log_view,
+        ],
+        expand=True,
+    )
+
+    tab_write = ft.Column(
+        [
+            ft.Text("Write Data to Tag", weight=ft.FontWeight.BOLD),
+            ft.Text(
+                "Ensure you have scanned a writable tag first.",
+                italic=True,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Divider(),
+            text_input,
+            ft.FilledTonalButton(
+                "Write Text Record", on_click=write_text, icon=ft.Icons.EDIT
+            ),
+            ft.Divider(),
+            uri_input,
+            ft.FilledTonalButton(
+                "Write URI Record", on_click=write_uri, icon=ft.Icons.LINK
+            ),
+        ],
+        expand=True,
+    )
+
+    tab_settings = ft.Column(
+        [
+            ft.Text("iOS Specific Settings", weight=ft.FontWeight.BOLD),
+            alert_msg_ios,
+            invalidate_first_read,
+            ft.Divider(),
+            ft.Text("Session Termination Settings", weight=ft.FontWeight.BOLD),
+            stop_error_msg,
+            ft.Text(
+                "Note: These options only affect iOS devices.",
+                italic=True,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+        ],
+        expand=True,
+    )
+
+    # Assemble the Layout
     page.add(
         ft.SafeArea(
             content=ft.Column(
                 [
-                    status,
                     ft.Row(
-                        [
-                            ft.FilledButton("Start scan", on_click=start_scan),
-                            ft.OutlinedButton("Stop", on_click=stop_scan),
-                            ft.FilledButton("Write 'Hello Flet'", on_click=write_demo),
-                        ],
-                        wrap=True,
+                        [status_icon, status_text],
+                        alignment=ft.MainAxisAlignment.CENTER,
                     ),
-                    ft.Divider(),
-                    log,
+                    session_indicator,
+                    ft.Tabs(
+                        selected_index=0,
+                        animation_duration=300,
+                        tabs=[
+                            ft.Tab(
+                                text="Scan & Read",
+                                icon=ft.Icons.SENSORS,
+                                content=tab_scan,
+                            ),
+                            ft.Tab(text="Write", icon=ft.Icons.EDIT, content=tab_write),
+                            ft.Tab(
+                                text="Settings",
+                                icon=ft.Icons.SETTINGS,
+                                content=tab_settings,
+                            ),
+                        ],
+                        expand=True,
+                    ),
                 ],
                 expand=True,
             )
         )
     )
 
-    page.run_task(setup)
+    page.run_task(check_avail)
 
 
 if __name__ == "__main__":
-    logger.info("Starting NFC demo app")
+    logger.info("Starting NFC Comprehensive Lab")
     ft.run(main)
