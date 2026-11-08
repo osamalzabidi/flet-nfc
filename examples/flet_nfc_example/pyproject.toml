@@ -1,0 +1,38 @@
+[project]
+name = "flet-nfc-example"
+version = "1.0.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Osama Mohammed", email = "osamalzabidi@gmail.com" }
+]
+dependencies = [
+    "flet-nfc",
+    "flet>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "flet-cli>=1.1.0",
+    "flet-desktop-light>=1.1.0",
+    "flet-web>=1.1.0",
+]
+
+[tool.flet]
+org = "com.flet"
+product = "flet-nfc-example"
+company = "Flet"
+copyright = "Copyright (C) 2026 by Appvora"
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.dev_packages]
+flet-nfc = "../.."
+
+[tool.uv.sources]
+flet-nfc = { path = "../../", editable = true }
+
+[tool.flet.android.permission]
+"android.permission.NFC" = true

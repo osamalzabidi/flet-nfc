@@ -1,0 +1,43 @@
+[project]
+name = "flet-nfc"
+version = "0.1.0"
+description = "Nfc Manager control for Flet"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Osama Mohammed", email = "osamalzabidi@gmail.com" }
+]
+keywords = ["flet", "nfc", "manager", "android", "ios"]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "flet>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]"
+]
+
+[project.urls]
+Homepage = "https://github.com/osamalzabidi/flet-nfc"
+Documentation = "https://github.com/osamalzabidi/flet-nfc"
+Repository = "https://github.com/osamalzabidi/flet-nfc"
+Issues = "https://github.com/osamalzabidi/flet-nfc/issues"
+
+[tool.setuptools.package-data]
+"flutter.flet_nfc" = ["**/*"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"

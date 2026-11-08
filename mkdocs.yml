@@ -1,0 +1,7 @@
+site_name: FletNfc
+
+theme:
+  name: "material"
+
+plugins:
+  - mkdocstrings
