@@ -6,6 +6,7 @@ from flet.controls.services.service import Service
 from flet_nfc.types import (
     NfcAvailability,
     NfcPollingOption,
+    NfcWriteResult,
 )
 
 __all__ = ["NfcManager"]
@@ -29,6 +30,8 @@ class NfcManager(Service):
 
     * :class:`~flet_nfc.types.NfcTagData` - payload delivered to
       :attr:`on_discovered`.
+    * :class:`~flet_nfc.types.NfcWriteResult` - payload returned by
+      :meth:`write_text` and :meth:`write_uri`.
     """
 
     on_discovered: Optional[ft.EventHandler[ft.ControlEvent]] = None
@@ -49,6 +52,20 @@ class NfcManager(Service):
     """
     Fired when the NFC session ends (either manually or because a tag was
     handled and the session auto-stopped).
+    """
+
+    on_state_changed: Optional[ft.EventHandler[ft.ControlEvent]] = None
+    """
+    Fired when the system NFC state changes (Android only).
+
+    ``e.data`` is one of:
+
+    * ``"enabled"`` - the user turned NFC on.
+    * ``"disabled"`` - the user turned NFC off.
+
+    Note:
+        This event is **Android-only**. iOS has no system NFC toggle — the
+        platform sheet appears on demand when :meth:`start_session` is called.
     """
 
     async def check_availability(self) -> NfcAvailability:
@@ -74,10 +91,11 @@ class NfcManager(Service):
                 ``[NfcPollingOption.ISO14443]``.
             alert_message_ios: Message shown in the iOS NFC sheet. iOS only.
             invalidate_after_first_read: If ``True``, the session stops
-                automatically after the first tag is read.
+                automatically after the first tag is read. iOS only.
 
         Returns:
-            ``True`` if the session started, ``False`` if NFC is unavailable.
+            ``True`` if the session started, ``False`` if NFC is unavailable
+            or the session failed to start (see :attr:`on_error`).
         """
         opts = [o.value for o in (polling_options or [NfcPollingOption.ISO14443])]
         return await self._invoke_method(
@@ -93,30 +111,47 @@ class NfcManager(Service):
         """
         Stop the active NFC session.
 
-        On iOS, if the system sheet is open, it will close immediately.
+        On iOS, if the system sheet is open, it will close immediately with
+        ``error_message_ios`` shown to the user.
         """
         await self._invoke_method(
             "stop_session", {"error_message_ios": error_message_ios}
         )
 
-    async def write_text(self, text: str, tag: Optional[dict] = None) -> dict:
+    async def write_text(self, text: str) -> NfcWriteResult:
         """
-        Write a text NDEF record to the tag.
+        Write a text NDEF record to the most recently discovered tag.
 
-        If ``tag`` is omitted, the most recently discovered tag is used.
+        The tag must have been discovered during a prior :meth:`start_session`
+        call and must be both NDEF-formatted and writable.
+
+        Args:
+            text: The text content to write. Encoded as UTF-8 with language
+                code ``"en"``.
 
         Returns:
-            A dict matching :class:`~flet_nfc.types.NfcWriteResult`.
+            A :class:`~flet_nfc.types.NfcWriteResult` with ``success=True``
+            on success, or ``success=False`` plus an ``error`` message when
+            the tag is read-only, not NDEF-compatible, or the write itself
+            failed.
         """
-        return await self._invoke_method("write_text", {"text": text, "tag": tag})
+        result = await self._invoke_method("write_text", {"text": text})
+        return NfcWriteResult(**result)
 
-    async def write_uri(self, uri: str, tag: Optional[dict] = None) -> dict:
+    async def write_uri(self, uri: str) -> NfcWriteResult:
         """
-        Write a URI NDEF record to the tag.
+        Write a URI NDEF record to the most recently discovered tag.
 
-        If ``tag`` is omitted, the most recently discovered tag is used.
+        The tag must have been discovered during a prior :meth:`start_session`
+        call and must be both NDEF-formatted and writable.
+
+        Args:
+            uri: The URI to encode. Must be a valid URI string
+                (e.g. ``"https://flet.dev"``, ``"tel:+1234567890"``).
 
         Returns:
-            A dict matching :class:`~flet_nfc.types.NfcWriteResult`.
+            A :class:`~flet_nfc.types.NfcWriteResult` with ``success=True``
+            on success, or ``success=False`` plus an ``error`` message.
         """
-        return await self._invoke_method("write_uri", {"uri": uri, "tag": tag})
+        result = await self._invoke_method("write_uri", {"uri": uri})
+        return NfcWriteResult(**result)

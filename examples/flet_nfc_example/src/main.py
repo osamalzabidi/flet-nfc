@@ -61,8 +61,10 @@ def main(page: ft.Page):
                 ft.Colors.ORANGE if avail == NfcAvailability.DISABLED else ft.Colors.RED
             )
         )
-        status_icon.name = (
-            ft.Icons.NFC if avail != NfcAvailability.UNSUPPORTED else ft.Icons.NFC_OFF
+        status_icon.icon = (
+            ft.Icons.NFC
+            if avail != NfcAvailability.UNSUPPORTED
+            else ft.Icons.OFFLINE_BOLT
         )
         status_text.value = f"NFC Status: {avail.value.upper()}"
 
@@ -83,7 +85,7 @@ def main(page: ft.Page):
     def on_state_changed(e: ft.ControlEvent):
         new_state = e.data
         add_log(
-            f"🔔 [SYSTEM EVENT] NFC state changed to: {new_state.upper()}",
+            f"🔔 [SYSTEM EVENT] NFC state changed to: {new_state.upper() if isinstance(new_state, str) else new_state}",
             ft.Colors.BLUE,
         )
         if new_state == "enabled":
@@ -182,8 +184,8 @@ def main(page: ft.Page):
         "Start Scan", on_click=start_scan, icon=ft.Icons.SEARCH, disabled=True
     )
 
-    tab_scan = ft.Column(
-        [
+    tab_scan_content = ft.Column(
+        controls=[
             ft.Text(
                 "Polling Options (Technologies to look for):", weight=ft.FontWeight.BOLD
             ),
@@ -206,7 +208,7 @@ def main(page: ft.Page):
         expand=True,
     )
 
-    tab_write = ft.Column(
+    tab_write_content = ft.Column(
         [
             ft.Text("Write Data to Tag", weight=ft.FontWeight.BOLD),
             ft.Text(
@@ -228,7 +230,7 @@ def main(page: ft.Page):
         expand=True,
     )
 
-    tab_settings = ft.Column(
+    tab_settings_content = ft.Column(
         [
             ft.Text("iOS Specific Settings", weight=ft.FontWeight.BOLD),
             alert_msg_ios,
@@ -245,34 +247,43 @@ def main(page: ft.Page):
         expand=True,
     )
 
-    # Assemble the Layout
+    tabs_control = ft.Tabs(
+        length=3,
+        selected_index=0,
+        animation_duration=300,
+        expand=True,
+        content=ft.Column(
+            expand=True,
+            controls=[
+                ft.TabBar(
+                    tabs=[
+                        ft.Tab(label="Scan & Read", icon=ft.Icons.SENSORS),
+                        ft.Tab(label="Write", icon=ft.Icons.EDIT),
+                        ft.Tab(label="Settings", icon=ft.Icons.SETTINGS),
+                    ]
+                ),
+                ft.TabBarView(
+                    expand=True,
+                    controls=[
+                        tab_scan_content,
+                        tab_write_content,
+                        tab_settings_content,
+                    ],
+                ),
+            ],
+        ),
+    )
+
     page.add(
         ft.SafeArea(
             content=ft.Column(
-                [
+                controls=[
                     ft.Row(
-                        [status_icon, status_text],
+                        controls=[status_icon, status_text],
                         alignment=ft.MainAxisAlignment.CENTER,
                     ),
                     session_indicator,
-                    ft.Tabs(
-                        selected_index=0,
-                        animation_duration=300,
-                        tabs=[
-                            ft.Tab(
-                                text="Scan & Read",
-                                icon=ft.Icons.SENSORS,
-                                content=tab_scan,
-                            ),
-                            ft.Tab(text="Write", icon=ft.Icons.EDIT, content=tab_write),
-                            ft.Tab(
-                                text="Settings",
-                                icon=ft.Icons.SETTINGS,
-                                content=tab_settings,
-                            ),
-                        ],
-                        expand=True,
-                    ),
+                    tabs_control,
                 ],
                 expand=True,
             )
